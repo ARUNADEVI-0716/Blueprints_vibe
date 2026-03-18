@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/lib/supabaseClient'
+import { CreditScorePageSkeleton } from '@/components/Skeleton'
 
 const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'
 
@@ -332,14 +333,8 @@ export default function CreditScorePage() {
 
     const scoreDelta = prevScore != null && creditData ? creditData.score - prevScore : null
 
-    if (loading) return (
-        <div className="page-wrapper flex items-center justify-center">
-            <div className="flex flex-col items-center gap-6">
-                <div className="w-20 h-20 rounded-full border-4 border-purple-200 border-t-purple-600 animate-spin"/>
-                <p className="text-xl text-purple-400 font-semibold">Loading your credit score…</p>
-            </div>
-        </div>
-    )
+    if (loading) return <CreditScorePageSkeleton />
+
 
     return (
         <div className="page-wrapper">

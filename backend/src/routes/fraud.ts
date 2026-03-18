@@ -1,6 +1,6 @@
 // routes/fraud.ts
 import { Router } from 'express'
-import { verifyToken, AuthRequest } from '../middleware/auth'
+import { verifyToken, AuthRequest, supabaseAdmin } from '../middleware/auth'
 import { createClient } from '@supabase/supabase-js'
 import { Response } from 'express'
 import { runFraudCheck } from '../services/fraudEngine'
@@ -8,9 +8,8 @@ import { runFraudCheck } from '../services/fraudEngine'
 const router = Router()
 const supabase = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-// ── Run fraud check for an application (called internally or by officer) ──
+// ── Run fraud check for an application ──────────────────────
 async function performFraudCheck(applicationId: string) {
-    // Fetch application
     const { data: app } = await supabase
         .from('loan_applications')
         .select('*')
@@ -19,7 +18,6 @@ async function performFraudCheck(applicationId: string) {
 
     if (!app) throw new Error('Application not found')
 
-    // Fetch transactions
     const { data: transactions } = await supabase
         .from('transactions')
         .select('amount, date, merchant, category')
@@ -27,7 +25,6 @@ async function performFraudCheck(applicationId: string) {
         .order('date', { ascending: false })
         .limit(90)
 
-    // Count other applications with same PAN
     const { data: panMatches } = await supabase
         .from('loan_applications')
         .select('id, full_name')
@@ -35,7 +32,6 @@ async function performFraudCheck(applicationId: string) {
         .neq('id', applicationId)
         .not('pan_number', 'is', null)
 
-    // Count other applications with same Aadhaar
     const { data: aadhaarMatches } = await supabase
         .from('loan_applications')
         .select('id')
@@ -54,7 +50,6 @@ async function performFraudCheck(applicationId: string) {
         fullName:                    app.full_name,
     })
 
-    // Save fraud result to application
     await supabase
         .from('loan_applications')
         .update({
@@ -74,7 +69,6 @@ router.post('/check/:applicationId', verifyToken, async (req: AuthRequest, res: 
     try {
         const { applicationId } = req.params
 
-        // Ensure application belongs to this user
         const { data: app } = await supabase
             .from('loan_applications')
             .select('id')
@@ -103,20 +97,19 @@ router.post('/check/:applicationId', verifyToken, async (req: AuthRequest, res: 
 
 // ── Officer: get fraud report for any application ────────────
 router.get('/report/:applicationId', async (req, res) => {
-    // Officer auth — check token manually
     const auth = req.headers.authorization
     if (!auth?.startsWith('Bearer ')) return res.status(401).json({ error: 'Unauthorized' })
 
     try {
         const token = auth.split(' ')[1]
-        const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString())
-        if (payload.email !== process.env.OFFICER_EMAIL) {
+        const { data: { user }, error } = await supabaseAdmin.auth.getUser(token)
+
+        if (error || !user) return res.status(401).json({ error: 'Invalid token' })
+        if (user.email !== process.env.OFFICER_EMAIL) {
             return res.status(403).json({ error: 'Not an officer account' })
         }
 
         const { applicationId } = req.params
-
-        // Re-run fresh check for latest data
         const result = await performFraudCheck(applicationId)
         res.json(result)
     } catch (err: any) {

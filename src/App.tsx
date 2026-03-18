@@ -21,6 +21,7 @@ import DocumentUploadPage from '@/pages/applicant/DocumentUploadPage'
 import RepaymentPage from '@/pages/applicant/RepaymentPage'
 import AgreementPage from '@/pages/applicant/AgreementPage'
 import NexusChat from '@/components/NexusChat'
+import ResetPasswordPage from '@/pages/ResetPasswordPage'
 
 export default function App() {
     return (
@@ -69,6 +70,7 @@ export default function App() {
                         <ProtectedRoute><LoanStatusPage /></ProtectedRoute>
                     } />
                     <Route path="/get-started" element={<GetStartedPage />} />
+                    <Route path="/reset-password" element={<ResetPasswordPage />} />
                     <Route path="/officer/setup-2fa" element={<OfficerTOTPSetup />} />
                     <Route path="/officer/verify-2fa" element={<OfficerTOTPVerify />} />
                     <Route path="*" element={<Navigate to="/" replace />} />
