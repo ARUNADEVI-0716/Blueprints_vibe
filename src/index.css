@@ -1,0 +1,97 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body, #root {
+        height: 100%;
+        width: 100%;
+        min-height: 100vh;
+        min-width: 100vw;
+    }
+
+    body {
+        font-family: 'Outfit', system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        background: #f0eeff;
+        overflow-x: hidden;
+    }
+}
+
+@layer components {
+    .auth-input {
+        @apply w-full bg-white border border-purple-100 rounded-xl px-4 py-3 text-sm text-gray-800 outline-none transition-all duration-200 placeholder:text-gray-300 font-sans;
+        box-shadow: 0 1px 3px rgba(109, 40, 217, 0.04);
+    }
+    .auth-input:focus {
+        @apply border-purple-400;
+        box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.12);
+    }
+    .btn-primary {
+        @apply w-full bg-purple-600 hover:bg-purple-700 active:scale-[0.99] text-white font-semibold rounded-xl py-3 px-6 text-sm transition-all duration-200 flex items-center justify-center gap-2 cursor-pointer border-none;
+        box-shadow: 0 4px 14px rgba(109, 40, 217, 0.35);
+    }
+    .btn-primary:disabled { @apply opacity-60 cursor-not-allowed; }
+    .btn-social {
+        @apply w-full bg-white hover:bg-purple-50 active:scale-[0.99] text-gray-700 font-medium rounded-xl py-3 px-6 text-sm transition-all duration-200 flex items-center justify-center gap-3 cursor-pointer border border-purple-100;
+        box-shadow: 0 1px 4px rgba(109, 40, 217, 0.06);
+    }
+    .field-label {
+        @apply block text-xs font-semibold text-gray-500 mb-1.5 tracking-wide uppercase;
+    }
+    .error-box {
+        @apply flex items-start gap-2 bg-red-50 border border-red-200 text-red-600 text-sm rounded-xl px-4 py-3;
+    }
+    .success-box {
+        @apply flex items-start gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm rounded-xl px-4 py-3;
+    }
+
+    /* Full screen page wrapper — use this on every page's outer div */
+    .page-wrapper {
+        min-height: 100vh;
+        min-width: 100vw;
+        width: 100%;
+        background: #f0eeff;
+        display: block;
+    }
+}
+
+.orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(60px);
+    opacity: 0.35;
+    animation: float 6s ease-in-out infinite;
+}
+.orb-1 { width: 300px; height: 300px; background: #c4b5fd; top: -60px; right: -60px; animation-delay: 0s; }
+.orb-2 { width: 200px; height: 200px; background: #818cf8; bottom: 80px; left: -40px; animation-delay: 2s; }
+.orb-3 { width: 160px; height: 160px; background: #f0abfc; top: 40%; right: 10%; animation-delay: 4s; }
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px) scale(1); }
+    50% { transform: translateY(-16px) scale(1.04); }
+}
+
+.glass-card {
+    background: rgba(255, 255, 255, 0.12);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 24px;
+}
+
+.floating-badge {
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    border-radius: 100px;
+}
+
+.animate-delay-100 { animation-delay: 100ms; opacity: 0; }
+.animate-delay-200 { animation-delay: 200ms; opacity: 0; }
+.animate-delay-300 { animation-delay: 300ms; opacity: 0; }
+.animate-delay-400 { animation-delay: 400ms; opacity: 0; }
+.animate-delay-500 { animation-delay: 500ms; opacity: 0; }
+
