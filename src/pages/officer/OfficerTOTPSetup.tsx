@@ -2,352 +2,395 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabaseClient'
 
+function MSIcon({ name, size = 20, color, fill = 0 }: { name: string; size?: number; color?: string; fill?: number }) {
+    return (
+        <span className="material-symbols-outlined"
+              style={{ fontSize: size, color, lineHeight: 1, fontVariationSettings: `'FILL' ${fill}, 'wght' 400, 'GRAD' 0, 'opsz' 24`, verticalAlign: 'middle' }}>
+            {name}
+        </span>
+    )
+}
+
 export default function OfficerTOTPSetup() {
     const navigate = useNavigate()
-    const [qrCode, setQrCode] = useState('')
-    const [secret, setSecret] = useState('')
-    const [factorId, setFactorId] = useState('')
-    const [otp, setOtp] = useState('')
-    const [loading, setLoading] = useState(true)
+    const [qrCode, setQrCode]       = useState('')
+    const [secret, setSecret]       = useState('')
+    const [factorId, setFactorId]   = useState('')
+    const [otp, setOtp]             = useState('')
+    const [loading, setLoading]     = useState(true)
     const [verifying, setVerifying] = useState(false)
-    const [error, setError] = useState('')
-    const [step, setStep] = useState<'scan' | 'verify' | 'done'>('scan')
+    const [error, setError]         = useState('')
+    const [step, setStep]           = useState<'scan' | 'verify' | 'done'>('scan')
 
     const officerEmail = localStorage.getItem('officer_email') || 'Officer'
 
     useEffect(() => {
+        const link = document.createElement('link')
+        link.rel  = 'stylesheet'
+        link.href = 'https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200'
+        document.head.appendChild(link)
+
         const token = localStorage.getItem('officer_token')
-        if (!token) {
-            navigate('/officer/login')
-            return
-        }
-        void enrollTOTP()
+        if (!token) { navigate('/officer/login'); return }
+
+        const params   = new URLSearchParams(window.location.search)
+        const forceNew = params.get('reset') === 'true' ||
+            localStorage.getItem('officer_totp_reset') === 'true'
+        localStorage.removeItem('officer_totp_reset')
+        void enrollTOTP(forceNew)
     }, [])
 
-    const enrollTOTP = async () => {
-        setLoading(true)
-        setError('')
+    const enrollTOTP = async (forceNew = false) => {
+        setLoading(true); setError('')
         try {
-            // Clear any existing unverified factors first
             const { data: factorsData } = await supabase.auth.mfa.listFactors()
-            for (const factor of factorsData?.totp || []) {
-                // Use type assertion to avoid TypeScript overlap error
-                const status = factor.status as string
-                if (status === 'unverified') {
-                    await supabase.auth.mfa.unenroll({ factorId: factor.id })
+            const allFactors = factorsData?.totp || []
+
+            if (!forceNew) {
+                for (const factor of allFactors) {
+                    if ((factor.status as string) === 'unverified') {
+                        try { await supabase.auth.mfa.unenroll({ factorId: factor.id }) } catch {}
+                    }
                 }
+                const verified = allFactors.find(f => (f.status as string) === 'verified')
+                if (verified) { navigate('/officer/verify-2fa'); return }
             }
 
-            const verified = factorsData?.totp?.find(f => (f.status as string) === 'verified')
-            if (verified) {
-                // Already set up — go to verify page
-                navigate('/officer/verify-2fa')
-                return
-            }
+            if (forceNew) await new Promise(r => setTimeout(r, 800))
 
-            // Enroll fresh TOTP
             const { data, error } = await supabase.auth.mfa.enroll({
                 factorType: 'totp',
-                issuer: 'Nexus Credit — Officer Portal',
+                issuer: 'Nexus — Officer Portal',
                 friendlyName: `Officer: ${officerEmail}`
             })
-
             if (error) throw error
 
             setFactorId(data.id)
             setQrCode(data.totp.qr_code)
             setSecret(data.totp.secret)
 
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Failed to initialize 2FA setup'
-            setError(message)
+        } catch (err: any) {
+            const msg = err.message || ''
+            if (msg.toLowerCase().includes('already exists') ||
+                msg.toLowerCase().includes('already enrolled')) {
+                await new Promise(r => setTimeout(r, 1500))
+                try {
+                    const { data, error } = await supabase.auth.mfa.enroll({
+                        factorType: 'totp',
+                        issuer: 'Nexus — Officer Portal',
+                        friendlyName: `Officer: ${officerEmail}`
+                    })
+                    if (error) throw error
+                    setFactorId(data.id)
+                    setQrCode(data.totp.qr_code)
+                    setSecret(data.totp.secret)
+                } catch {
+                    navigate('/officer/verify-2fa')
+                }
+                return
+            }
+            setError(msg || 'Failed to initialize 2FA setup')
         } finally {
             setLoading(false)
         }
     }
 
     const handleVerify = async () => {
-        if (otp.length !== 6) {
-            setError('Please enter the complete 6-digit code')
-            return
-        }
-        setVerifying(true)
-        setError('')
-
+        if (otp.length !== 6) { setError('Please enter the complete 6-digit code'); return }
+        setVerifying(true); setError('')
         try {
-            // Create challenge
-            const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
-                factorId
-            })
+            const { data: challenge, error: challengeError } =
+                await supabase.auth.mfa.challenge({ factorId })
             if (challengeError) throw challengeError
 
-            // Verify code
             const { error: verifyError } = await supabase.auth.mfa.verify({
-                factorId,
-                challengeId: challenge.id,
-                code: otp
+                factorId, challengeId: challenge.id, code: otp
             })
-
             if (verifyError) {
                 setError('Invalid code. Please check your authenticator app and try again.')
-                setOtp('')
-                setVerifying(false)
-                return
+                setOtp(''); setVerifying(false); return
             }
 
-            // Mark TOTP as set up in localStorage
             localStorage.setItem('officer_totp_verified', 'true')
             setStep('done')
             setTimeout(() => navigate('/officer/dashboard'), 2500)
-
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'Verification failed'
-            setError(message)
+        } catch (err: any) {
+            setError(err.message || 'Verification failed')
             setVerifying(false)
         }
     }
 
     return (
-        <div className="page-wrapper flex items-center justify-center p-8">
-            <div className="w-full max-w-5xl grid lg:grid-cols-2 gap-6 items-stretch">
+        <div style={{ minHeight: '100vh', background: '#f7f9fb', fontFamily: 'Public Sans, Inter, sans-serif', display: 'flex', flexDirection: 'column' }}>
+            <style>{`
+                .material-symbols-outlined { font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24; vertical-align:middle; }
+                @keyframes spin  { to { transform: rotate(360deg) } }
+                @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+            `}</style>
 
-                {/* ── Left — Setup Card ── */}
-                <div className="bg-white rounded-3xl p-12 border border-purple-100 flex flex-col justify-center"
-                     style={{ boxShadow: '0 4px 24px rgba(109,40,217,0.08)' }}>
-
-                    {/* Brand */}
-                    <div className="flex items-center gap-4 mb-10">
-                        <div className="w-14 h-14 bg-purple-600 rounded-2xl flex items-center justify-center">
-                            <svg width="26" height="26" viewBox="0 0 20 20" fill="none">
-                                <rect x="2" y="2" width="7" height="7" rx="2" fill="white" />
-                                <rect x="11" y="2" width="7" height="7" rx="2" fill="white" opacity="0.5" />
-                                <rect x="2" y="11" width="7" height="7" rx="2" fill="white" opacity="0.5" />
-                                <rect x="11" y="11" width="7" height="7" rx="2" fill="white" />
-                            </svg>
-                        </div>
-                        <div>
-                            <span className="font-display font-bold text-purple-900 text-3xl tracking-tight block">
-                                Nexus
-                            </span>
-                            <span className="text-base bg-purple-100 text-purple-600 px-3 py-1 rounded-full font-semibold">
-                                Officer 2FA Setup
-                            </span>
-                        </div>
+            {/* Header */}
+            <header style={{ position:'fixed', top:0, width:'100%', zIndex:50, background:'rgba(255,255,255,0.9)', backdropFilter:'blur(16px)', borderBottom:'1px solid #e0e3e5', boxShadow:'0 1px 3px rgba(0,0,0,0.04)' }}>
+                <div style={{ maxWidth:1100, margin:'0 auto', padding:'0 24px', height:56, display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <MSIcon name="shield_lock" size={20} color="#001736" fill={1}/>
+                        <span style={{ fontWeight:900, fontSize:16, color:'#001736', letterSpacing:'-0.3px' }}>Nexus Officer Portal</span>
                     </div>
-
-                    {/* ── SCAN STEP ── */}
-                    {step === 'scan' && (
-                        <>
-                            <div className="mb-8">
-                                <h1 className="font-display font-bold text-4xl text-gray-900 tracking-tight mb-3">
-                                    Secure Your Account
-                                </h1>
-                                <p className="text-gray-400 text-lg leading-relaxed">
-                                    As a loan officer you have access to sensitive financial data.
-                                    Two-factor authentication is <span className="text-purple-600 font-semibold">mandatory</span> for your account.
-                                </p>
-                            </div>
-
-                            {/* Steps */}
-                            <div className="space-y-4 mb-8">
-                                {[
-                                    { num: '1', icon: '📱', text: 'Download Google Authenticator or Authy on your phone' },
-                                    { num: '2', icon: '➕', text: 'Open the app and tap "Add Account" or "+"' },
-                                    { num: '3', icon: '📷', text: 'Scan the QR code on the right' },
-                                ].map(s => (
-                                    <div key={s.num} className="flex items-center gap-4 bg-purple-50 rounded-2xl p-5">
-                                        <div className="w-10 h-10 bg-purple-600 rounded-xl flex items-center justify-center text-white font-bold text-base flex-shrink-0">
-                                            {s.num}
-                                        </div>
-                                        <span className="text-2xl">{s.icon}</span>
-                                        <p className="text-gray-700 text-base font-medium">{s.text}</p>
-                                    </div>
-                                ))}
-                            </div>
-
-                            {error && (
-                                <div className="bg-red-50 border border-red-200 text-red-600 rounded-2xl px-5 py-4 mb-6 text-base flex items-center gap-3">
-                                    <span>⚠️</span> {error}
-                                </div>
-                            )}
-
-                            <button onClick={() => setStep('verify')}
-                                    disabled={loading}
-                                    className="btn-primary"
-                                    style={{ padding: '18px 28px', fontSize: '18px', borderRadius: '16px' }}>
-                                {loading
-                                    ? <span className="flex items-center gap-2"><Spinner /> Loading QR Code…</span>
-                                    : "I've Scanned the QR Code →"}
-                            </button>
-                        </>
-                    )}
-
-                    {/* ── VERIFY STEP ── */}
-                    {step === 'verify' && (
-                        <>
-                            <div className="mb-8">
-                                <button onClick={() => setStep('scan')}
-                                        className="flex items-center gap-2 text-base text-purple-400 hover:text-purple-600 mb-6 transition-colors">
-                                    <svg width="16" height="16" viewBox="0 0 13 13" fill="none">
-                                        <path d="M8 2L4 6.5 8 11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-                                    </svg>
-                                    Back to QR Code
-                                </button>
-                                <h1 className="font-display font-bold text-4xl text-gray-900 tracking-tight mb-3">
-                                    Enter Verification Code
-                                </h1>
-                                <p className="text-gray-400 text-lg">
-                                    Open your authenticator app and enter the
-                                    <span className="text-purple-600 font-bold"> 6-digit code</span> for Nexus
-                                </p>
-                            </div>
-
-                            {error && (
-                                <div className="bg-red-50 border border-red-200 text-red-600 rounded-2xl px-5 py-4 mb-6 text-base flex items-center gap-3">
-                                    <span>⚠️</span> {error}
-                                </div>
-                            )}
-
-                            {/* OTP Input */}
-                            <div className="mb-8">
-                                <input
-                                    type="text"
-                                    inputMode="numeric"
-                                    maxLength={6}
-                                    value={otp}
-                                    onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                                    placeholder="000000"
-                                    className="w-full text-center text-5xl font-bold tracking-widest bg-white border-2 border-purple-200 rounded-2xl px-5 py-6 outline-none transition-all focus:border-purple-500"
-                                    style={{
-                                        letterSpacing: '0.5em',
-                                        boxShadow: otp.length === 6 ? '0 0 0 3px rgba(139,92,246,0.15)' : 'none'
-                                    }}
-                                    autoFocus
-                                />
-                                <p className="text-center text-gray-400 text-sm mt-3">
-                                    ⏱ Code refreshes every 30 seconds
-                                </p>
-                            </div>
-
-                            <button onClick={handleVerify}
-                                    disabled={verifying || otp.length !== 6}
-                                    className="btn-primary"
-                                    style={{ padding: '18px 28px', fontSize: '18px', borderRadius: '16px' }}>
-                                {verifying
-                                    ? <span className="flex items-center gap-2"><Spinner /> Verifying…</span>
-                                    : '🔐 Activate 2FA & Enter Dashboard'}
-                            </button>
-                        </>
-                    )}
-
-                    {/* ── DONE STEP ── */}
-                    {step === 'done' && (
-                        <div className="text-center py-8">
-                            <div className="w-24 h-24 bg-emerald-100 rounded-3xl flex items-center justify-center text-5xl mx-auto mb-8">
-                                🎉
-                            </div>
-                            <h2 className="font-display font-bold text-4xl text-gray-900 mb-4">
-                                2FA Activated!
-                            </h2>
-                            <p className="text-gray-400 text-xl mb-4">
-                                Your officer account is now fully secured
-                            </p>
-                            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 mb-6">
-                                <p className="text-emerald-700 text-base font-semibold">
-                                    ✅ From now on, every login will require your authenticator code
-                                </p>
-                            </div>
-                            <p className="text-purple-500 text-base font-semibold animate-pulse">
-                                Redirecting to dashboard…
-                            </p>
-                        </div>
-                    )}
+                    <span style={{ fontSize:12, color:'#747780', fontWeight:500 }}>Security Portal</span>
                 </div>
+            </header>
 
-                {/* ── Right — QR Code Panel ── */}
-                <div className="hidden lg:flex flex-col rounded-3xl relative overflow-hidden"
-                     style={{ background: 'linear-gradient(135deg, #7c3aed 0%, #6d28d9 50%, #4f46e5 100%)' }}>
+            <main style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', padding:'80px 24px 40px', gap:24, flexWrap:'wrap' }}>
 
-                    <div className="orb orb-1" />
-                    <div className="orb orb-2" />
-                    <div className="orb orb-3" />
+                {/* Left card */}
+                <div style={{ width:'100%', maxWidth:440, background:'white', borderRadius:14, border:'1px solid #e0e3e5', boxShadow:'0 8px 32px rgba(0,0,0,0.07)', overflow:'hidden' }}>
+                    <div style={{ height:4, background:'linear-gradient(90deg,#001736,#0060ac)' }}/>
+                    <div style={{ padding:'36px 40px' }}>
 
-                    <div className="relative z-10 flex flex-col justify-between h-full p-10">
-
-                        {/* Top */}
-                        <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-                                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                                    <rect x="2" y="2" width="7" height="7" rx="2" fill="white" />
-                                    <rect x="11" y="2" width="7" height="7" rx="2" fill="white" opacity="0.5" />
-                                    <rect x="2" y="11" width="7" height="7" rx="2" fill="white" opacity="0.5" />
-                                    <rect x="11" y="11" width="7" height="7" rx="2" fill="white" />
+                        {/* Brand */}
+                        <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:28 }}>
+                            <div style={{ width:32, height:32, background:'#001736', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                                    <rect x="2" y="2" width="7" height="7" rx="1.5" fill="white"/>
+                                    <rect x="11" y="2" width="7" height="7" rx="1.5" fill="white" opacity="0.5"/>
+                                    <rect x="2" y="11" width="7" height="7" rx="1.5" fill="white" opacity="0.5"/>
+                                    <rect x="11" y="11" width="7" height="7" rx="1.5" fill="white"/>
                                 </svg>
                             </div>
-                            <span className="text-white font-display font-bold text-xl">Officer Portal</span>
+                            <div>
+                                <p style={{ fontWeight:900, fontSize:16, color:'#001736', margin:0 }}>Nexus</p>
+                                <span style={{ fontSize:11, fontWeight:700, background:'#eef4ff', color:'#0060ac', padding:'2px 8px', borderRadius:100 }}>Officer 2FA Setup</span>
+                            </div>
                         </div>
 
-                        {/* QR Code center */}
-                        <div className="flex flex-col items-center justify-center flex-1 py-10">
+                        {/* SCAN */}
+                        {step === 'scan' && (
+                            <>
+                                <div style={{ textAlign:'center', marginBottom:24 }}>
+                                    <div style={{ width:56, height:56, borderRadius:'50%', background:'#f2f4f6', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px' }}>
+                                        <MSIcon name="passkey" size={28} color="#0060ac" fill={1}/>
+                                    </div>
+                                    <h1 style={{ fontWeight:900, fontSize:22, color:'#001736', letterSpacing:'-0.5px', marginBottom:8 }}>Secure Your Account</h1>
+                                    <p style={{ fontSize:14, color:'#43474f', lineHeight:1.65 }}>
+                                        As a loan officer you have access to sensitive financial data.
+                                        Two-factor authentication is <strong style={{ color:'#001736' }}>mandatory</strong>.
+                                    </p>
+                                </div>
+
+                                <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:24 }}>
+                                    {[
+                                        { num:'1', icon:'smartphone',      text:'Download Google Authenticator or Authy on your phone' },
+                                        { num:'2', icon:'add_circle',      text:'Open the app and tap "Add Account" or "+"' },
+                                        { num:'3', icon:'qr_code_scanner', text:'Scan the QR code shown on this page' },
+                                    ].map(s => (
+                                        <div key={s.num} style={{ display:'flex', alignItems:'center', gap:12, background:'#f7f9fb', borderRadius:10, padding:'12px 14px', border:'1px solid #e0e3e5' }}>
+                                            <div style={{ width:28, height:28, background:'#001736', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center', color:'white', fontWeight:800, fontSize:12, flexShrink:0 }}>{s.num}</div>
+                                            <MSIcon name={s.icon} size={18} color="#0060ac"/>
+                                            <p style={{ fontSize:13, color:'#43474f', margin:0 }}>{s.text}</p>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {error && (
+                                    <div style={{ background:'#fef2f2', border:'1px solid #fecaca', color:'#dc2626', borderRadius:8, padding:'10px 14px', marginBottom:16, fontSize:13, display:'flex', gap:8, alignItems:'center' }}>
+                                        <MSIcon name="warning" size={14} color="#dc2626"/> {error}
+                                    </div>
+                                )}
+
+                                <button onClick={() => setStep('verify')} disabled={loading}
+                                        style={{ width:'100%', padding:'13px', background:'#001736', color:'white', border:'none', borderRadius:8, fontWeight:700, fontSize:15, cursor:loading?'not-allowed':'pointer', opacity:loading?0.7:1, display:'flex', alignItems:'center', justifyContent:'center', gap:8, transition:'all 0.2s' }}
+                                        onMouseEnter={e => !loading && (e.currentTarget.style.background='#002b5b')}
+                                        onMouseLeave={e => (e.currentTarget.style.background='#001736')}>
+                                    {loading ? <><Spinner/> Loading QR Code…</> : <>I've Scanned the QR Code <MSIcon name="arrow_forward" size={16} color="white"/></>}
+                                </button>
+                            </>
+                        )}
+
+                        {/* VERIFY */}
+                        {step === 'verify' && (
+                            <>
+                                <button onClick={() => setStep('scan')}
+                                        style={{ display:'flex', alignItems:'center', gap:6, background:'none', border:'none', cursor:'pointer', fontSize:13, fontWeight:600, color:'#0060ac', marginBottom:20, padding:0 }}>
+                                    <MSIcon name="arrow_back" size={16} color="#0060ac"/> Back to QR Code
+                                </button>
+
+                                <div style={{ textAlign:'center', marginBottom:24 }}>
+                                    <div style={{ width:56, height:56, borderRadius:'50%', background:'#f2f4f6', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 14px' }}>
+                                        <MSIcon name="pin" size={28} color="#0060ac" fill={1}/>
+                                    </div>
+                                    <h1 style={{ fontWeight:900, fontSize:22, color:'#001736', letterSpacing:'-0.5px', marginBottom:8 }}>Enter Verification Code</h1>
+                                    <p style={{ fontSize:14, color:'#43474f' }}>
+                                        Open your authenticator app and enter the <strong style={{ color:'#001736' }}>6-digit code</strong> for Nexus
+                                    </p>
+                                </div>
+
+                                {error && (
+                                    <div style={{ background:'#fef2f2', border:'1px solid #fecaca', color:'#dc2626', borderRadius:8, padding:'10px 14px', marginBottom:16, fontSize:13, display:'flex', gap:8, alignItems:'center' }}>
+                                        <MSIcon name="warning" size={14} color="#dc2626"/> {error}
+                                    </div>
+                                )}
+
+                                {/* OTP Input */}
+                                <div style={{ marginBottom:20 }}>
+                                    <label style={{ display:'block', fontSize:10, fontWeight:700, color:'#43474f', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:10 }}>
+                                        Authenticator Code
+                                    </label>
+                                    <div style={{ position:'relative' }}>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            maxLength={6}
+                                            value={otp}
+                                            onChange={e => setOtp(e.target.value.replace(/\D/g,'').slice(0,6))}
+                                            onKeyDown={e => e.key==='Enter' && handleVerify()}
+                                            autoFocus
+                                            style={{
+                                                width:'100%',
+                                                height:72,
+                                                textAlign:'center',
+                                                fontSize:32,
+                                                fontWeight:900,
+                                                letterSpacing:'12px',
+                                                fontFamily:'monospace',
+                                                color:'#001736',
+                                                background:'#f2f4f6',
+                                                border:'2px solid #e0e3e5',
+                                                borderRadius:12,
+                                                outline:'none',
+                                                boxSizing:'border-box',
+                                                paddingLeft:12,
+                                                transition:'all 0.2s',
+                                                caretColor:'#0060ac',
+                                            }}
+                                            onFocus={e => {
+                                                e.target.style.background = 'white'
+                                                e.target.style.borderColor = '#0060ac'
+                                                e.target.style.boxShadow = '0 0 0 3px rgba(0,96,172,0.12)'
+                                            }}
+                                            onBlur={e => {
+                                                e.target.style.background = '#f2f4f6'
+                                                e.target.style.borderColor = '#e0e3e5'
+                                                e.target.style.boxShadow = 'none'
+                                            }}
+                                        />
+                                        <div style={{ position:'absolute', right:14, top:'50%', transform:'translateY(-50%)', display:'flex', gap:4 }}>
+                                            {[0,1,2,3,4,5].map(i => (
+                                                <div key={i} style={{ width:6, height:6, borderRadius:'50%', background:otp[i]?'#0060ac':'#e0e3e5', transition:'background 0.15s' }}/>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6, marginTop:10 }}>
+                                        <MSIcon name="schedule" size={13} color="#43474f"/>
+                                        <span style={{ fontSize:10, fontWeight:700, color:'#43474f', textTransform:'uppercase', letterSpacing:'0.1em' }}>Refreshes every 30 seconds</span>
+                                    </div>
+                                </div>
+
+                                <button onClick={handleVerify} disabled={verifying || otp.length !== 6}
+                                        style={{ width:'100%', padding:'13px', background:otp.length===6?'#001736':'#e0e3e5', color:otp.length===6?'white':'#747780', border:'none', borderRadius:8, fontWeight:700, fontSize:15, cursor:verifying||otp.length!==6?'not-allowed':'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, transition:'all 0.2s' }}
+                                        onMouseEnter={e => otp.length===6 && !verifying && (e.currentTarget.style.background='#002b5b')}
+                                        onMouseLeave={e => (e.currentTarget.style.background=otp.length===6?'#001736':'#e0e3e5')}>
+                                    {verifying ? <><Spinner/> Verifying…</> : <><MSIcon name="lock_open" size={16} color={otp.length===6?'white':'#747780'}/> Activate 2FA &amp; Enter Dashboard</>}
+                                </button>
+                            </>
+                        )}
+
+                        {/* DONE */}
+                        {step === 'done' && (
+                            <div style={{ textAlign:'center', padding:'16px 0' }}>
+                                <div style={{ width:72, height:72, background:'#f0fdf4', borderRadius:'50%', display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 20px' }}>
+                                    <MSIcon name="check_circle" size={40} color="#16a34a" fill={1}/>
+                                </div>
+                                <h2 style={{ fontWeight:900, fontSize:24, color:'#001736', marginBottom:8, letterSpacing:'-0.5px' }}>2FA Activated!</h2>
+                                <p style={{ fontSize:14, color:'#43474f', marginBottom:16 }}>Your officer account is now fully secured.</p>
+                                <div style={{ background:'#f0fdf4', border:'1px solid #bbf7d0', borderRadius:10, padding:'12px 16px', marginBottom:16 }}>
+                                    <p style={{ fontSize:13, color:'#15803d', fontWeight:600, display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                                        <MSIcon name="verified_user" size={14} color="#15803d" fill={1}/>
+                                        Every login will now require your authenticator code
+                                    </p>
+                                </div>
+                                <p style={{ fontSize:13, color:'#0060ac', fontWeight:600, animation:'pulse 2s infinite' }}>
+                                    Redirecting to dashboard…
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* Right QR panel */}
+                <div style={{ width:'100%', maxWidth:380, background:'linear-gradient(135deg,#001736 0%,#002b5b 60%,#0060ac 100%)', borderRadius:14, minHeight:520, display:'flex', flexDirection:'column', position:'relative', overflow:'hidden' }}>
+                    <div style={{ position:'absolute', width:200, height:200, borderRadius:'50%', background:'rgba(0,96,172,0.3)', filter:'blur(60px)', top:-40, right:-40 }}/>
+                    <div style={{ position:'absolute', width:150, height:150, borderRadius:'50%', background:'rgba(0,96,172,0.15)', filter:'blur(40px)', bottom:40, left:-30 }}/>
+
+                    <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', height:'100%', padding:'28px' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                            <div style={{ width:32, height:32, background:'rgba(255,255,255,0.15)', borderRadius:8, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                                <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
+                                    <rect x="2" y="2" width="7" height="7" rx="1.5" fill="white"/>
+                                    <rect x="11" y="2" width="7" height="7" rx="1.5" fill="white" opacity="0.5"/>
+                                    <rect x="2" y="11" width="7" height="7" rx="1.5" fill="white" opacity="0.5"/>
+                                    <rect x="11" y="11" width="7" height="7" rx="1.5" fill="white"/>
+                                </svg>
+                            </div>
+                            <span style={{ fontWeight:700, fontSize:14, color:'white' }}>Officer Portal</span>
+                        </div>
+
+                        <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', flex:1, padding:'24px 0' }}>
                             {loading ? (
-                                <div className="flex flex-col items-center gap-6">
-                                    <div className="w-16 h-16 rounded-full border-4 border-white/30 border-t-white animate-spin" />
-                                    <p className="text-white text-lg font-semibold">Generating QR Code…</p>
+                                <div style={{ textAlign:'center' }}>
+                                    <div style={{ width:40, height:40, border:'3px solid rgba(255,255,255,0.2)', borderTopColor:'white', borderRadius:'50%', animation:'spin 0.8s linear infinite', margin:'0 auto 16px' }}/>
+                                    <p style={{ fontSize:14, color:'rgba(255,255,255,0.7)', fontWeight:600 }}>Generating QR Code…</p>
                                 </div>
                             ) : qrCode ? (
                                 <>
-                                    <p className="text-purple-200 text-base font-semibold mb-6 uppercase tracking-widest">
+                                    <p style={{ fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:'0.12em', marginBottom:16, textAlign:'center' }}>
                                         Scan with Authenticator App
                                     </p>
-                                    {/* QR Code display */}
-                                    <div className="bg-white p-5 rounded-3xl mb-6"
-                                         style={{ boxShadow: '0 8px 32px rgba(0,0,0,0.3)' }}>
-                                        <img src={qrCode} alt="TOTP QR Code"
-                                             className="w-52 h-52" />
+                                    <div style={{ background:'white', padding:16, borderRadius:12, boxShadow:'0 8px 32px rgba(0,0,0,0.4)', marginBottom:16 }}>
+                                        <img src={qrCode} alt="TOTP QR Code" style={{ width:180, height:180, display:'block' }}/>
                                     </div>
-
-                                    {/* Manual secret */}
-                                    <div className="glass-card px-6 py-4 w-full max-w-xs text-center">
-                                        <p className="text-purple-200 text-xs font-semibold uppercase tracking-widest mb-2">
-                                            Manual Entry Code
-                                        </p>
-                                        <p className="font-mono text-white text-sm tracking-widest break-all">
-                                            {secret}
-                                        </p>
+                                    <div style={{ background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.15)', borderRadius:10, padding:'12px 16px', width:'100%', textAlign:'center' }}>
+                                        <p style={{ fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:6 }}>Manual Entry Code</p>
+                                        <p style={{ fontFamily:'monospace', fontSize:12, color:'white', letterSpacing:'0.1em', wordBreak:'break-all', lineHeight:1.5, margin:0 }}>{secret}</p>
                                     </div>
-
-                                    <p className="text-purple-300 text-sm mt-4 text-center max-w-xs">
+                                    <p style={{ fontSize:11, color:'rgba(255,255,255,0.4)', marginTop:10, textAlign:'center', lineHeight:1.5 }}>
                                         Can't scan? Enter the code above manually in your authenticator app
                                     </p>
                                 </>
                             ) : (
-                                <div className="text-center">
-                                    <p className="text-red-300 text-lg font-semibold">Failed to generate QR code</p>
-                                    <button onClick={enrollTOTP}
-                                            className="mt-4 bg-white/20 text-white px-6 py-3 rounded-xl font-semibold hover:bg-white/30 transition-colors">
+                                <div style={{ textAlign:'center' }}>
+                                    <MSIcon name="qr_code" size={40} color="rgba(255,255,255,0.3)"/>
+                                    <p style={{ fontSize:14, color:'rgba(255,255,255,0.5)', margin:'12px 0' }}>Failed to generate QR code</p>
+                                    <button onClick={() => enrollTOTP(true)}
+                                            style={{ background:'rgba(255,255,255,0.15)', color:'white', border:'none', borderRadius:8, padding:'9px 20px', fontWeight:600, fontSize:13, cursor:'pointer' }}>
                                         Try Again
                                     </button>
                                 </div>
                             )}
                         </div>
 
-                        {/* Bottom security info */}
+                        <div style={{ display:'flex', gap:16, justifyContent:'center' }}>
+                            {[{ icon:'verified_user', label:'SSL Secured' }, { icon:'account_balance', label:'Member FDIC' }].map(b => (
+                                <div key={b.label} style={{ display:'flex', alignItems:'center', gap:5 }}>
+                                    <MSIcon name={b.icon} size={13} color="rgba(255,255,255,0.35)" fill={1}/>
+                                    <span style={{ fontSize:9, fontWeight:700, color:'rgba(255,255,255,0.35)', textTransform:'uppercase', letterSpacing:'0.1em' }}>{b.label}</span>
+                                </div>
+                            ))}
+                        </div>
                     </div>
                 </div>
-            </div>
+            </main>
+
+            <footer style={{ textAlign:'center', padding:'16px' }}>
+                <p style={{ fontSize:11, color:'#c4c6d0' }}>© 2026 Nexus Financial Technologies. Officer Portal</p>
+            </footer>
         </div>
     )
 }
 
 function Spinner() {
     return (
-        <svg width="18" height="18" viewBox="0 0 14 14" fill="none"
-             style={{ animation: 'spin 0.7s linear infinite' }}>
+        <svg width="16" height="16" viewBox="0 0 14 14" fill="none" style={{ animation:'spin 0.7s linear infinite' }}>
             <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-            <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5"
-                    strokeDasharray="28" strokeDashoffset="10" strokeLinecap="round"/>
+            <circle cx="7" cy="7" r="5.5" stroke="currentColor" strokeWidth="1.5" strokeDasharray="28" strokeDashoffset="10" strokeLinecap="round"/>
         </svg>
     )
 }
-
-

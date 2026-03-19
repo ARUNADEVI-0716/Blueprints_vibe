@@ -1,4 +1,3 @@
-import { verifyToken, AuthRequest } from '../middleware/auth'
 import { createLoanPayout, confirmTestPayment } from '../services/stripeService'
 import { createClient } from '@supabase/supabase-js'
 import { Router,Request, Response, NextFunction } from 'express'

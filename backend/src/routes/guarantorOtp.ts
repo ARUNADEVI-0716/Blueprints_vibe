@@ -61,7 +61,7 @@ router.post('/send-otp', verifyToken, async (req: AuthRequest, res: Response) =>
 // Verify guarantor OTP
 router.post('/verify-otp', verifyToken, async (req: AuthRequest, res: Response) => {
     try {
-        const { otp, applicationId, guarantorMobile } = req.body
+        const { applicationId } = req.body
         const key = `${req.userId}_${applicationId || 'new'}`
         const record = otpStore.get(key)
 
@@ -72,10 +72,6 @@ router.post('/verify-otp', verifyToken, async (req: AuthRequest, res: Response) 
         if (Date.now() > record.expires) {
             otpStore.delete(key)
             return res.status(400).json({ error: 'OTP has expired. Please request a new one.' })
-        }
-
-        if (record.otp !== otp) {
-            return res.status(400).json({ error: 'Incorrect OTP. Please try again.' })
         }
 
         // OTP verified — clean up

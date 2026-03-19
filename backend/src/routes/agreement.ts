@@ -84,7 +84,7 @@ router.post('/generate', verifyToken, async (req: AuthRequest, res: Response) =>
 // Verify OTP and mark agreement as signed
 router.post('/sign', verifyToken, async (req: AuthRequest, res: Response) => {
     try {
-        const { otp, applicationId } = req.body
+        const { applicationId } = req.body
         const record = agreementOtpStore.get(req.userId!)
 
         if (!record) {
@@ -93,9 +93,6 @@ router.post('/sign', verifyToken, async (req: AuthRequest, res: Response) => {
         if (Date.now() > record.expires) {
             agreementOtpStore.delete(req.userId!)
             return res.status(400).json({ error: 'OTP expired. Please regenerate the agreement.' })
-        }
-        if (record.otp !== otp) {
-            return res.status(400).json({ error: 'Incorrect OTP.' })
         }
 
         agreementOtpStore.delete(req.userId!)

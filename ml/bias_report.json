@@ -1,0 +1,115 @@
+{
+  "training_date": "2026-03-19T23:01:38.008265",
+  "datasets_used": [
+    null,
+    null,
+    "Empirical fallback"
+  ],
+  "total_records": 25000,
+  "repay_rate": 0.933,
+  "test_roc_auc": 0.9996589400265554,
+  "train_roc_auc": 0.9998928588568412,
+  "auc_gap": 0.0002339188302857842,
+  "brier_score": 0.005273364765977699,
+  "cv_auc_mean": 0.9997871734574714,
+  "cv_auc_std": 6.654902582888069e-05,
+  "feature_names": [
+    "avg_monthly_transactions",
+    "transaction_consistency",
+    "avg_balance",
+    "income_credit_monthly",
+    "savings_rate",
+    "luxury_spend_ratio",
+    "months_of_data",
+    "rent_payments_on_time",
+    "utility_payments_on_time",
+    "repaid_loans_count",
+    "prior_repayment_pct",
+    "employment_score",
+    "is_cold_start"
+  ],
+  "feature_importances": {
+    "avg_monthly_transactions": 0.011500001884996891,
+    "transaction_consistency": 0.03136525675654411,
+    "avg_balance": 0.09728968888521194,
+    "income_credit_monthly": 0.031030988320708275,
+    "savings_rate": 0.2509392201900482,
+    "luxury_spend_ratio": 0.4270387887954712,
+    "months_of_data": 0.006039487197995186,
+    "rent_payments_on_time": 0.013613400980830193,
+    "utility_payments_on_time": 0.012683279812335968,
+    "repaid_loans_count": 0.010905538685619831,
+    "prior_repayment_pct": 0.08852202445268631,
+    "employment_score": 0.019072415307164192,
+    "is_cold_start": 0.0
+  },
+  "bias_report": {
+    "income_groups": {
+      "low_income": {
+        "n": 1650,
+        "approval_rate": 0.855,
+        "tpr": 0.989,
+        "fpr": 0.009,
+        "precision": 0.999,
+        "auc": 1.0
+      },
+      "mid_income": {
+        "n": 1650,
+        "approval_rate": 0.952,
+        "tpr": 0.994,
+        "fpr": 0.014,
+        "precision": 0.999,
+        "auc": 1.0
+      },
+      "high_income": {
+        "n": 1700,
+        "approval_rate": 0.975,
+        "tpr": 0.996,
+        "fpr": 0.027,
+        "precision": 0.999,
+        "auc": 0.999
+      }
+    },
+    "employment_groups": {
+      "unstable_employment": {
+        "n": 2914,
+        "approval_rate": 0.914,
+        "tpr": 0.994,
+        "fpr": 0.017,
+        "precision": 0.998,
+        "auc": 1.0
+      },
+      "stable_employment": {
+        "n": 2086,
+        "approval_rate": 0.947,
+        "tpr": 0.993,
+        "fpr": 0.0,
+        "precision": 1.0,
+        "auc": 1.0
+      }
+    },
+    "cold_start_groups": {
+      "cold_start": null,
+      "established": null
+    },
+    "disparity_ratios": {
+      "income_approval_rate": 0.877,
+      "income_tpr": 0.993,
+      "cold_start_approval_rate": null,
+      "cold_start_tpr": null,
+      "employment_approval_rate": 0.965
+    },
+    "bias_flags": {},
+    "bias_status": "PASS"
+  },
+  "model_params": {
+    "n_estimators": 400,
+    "max_depth": 5,
+    "learning_rate": 0.04,
+    "subsample": 0.75,
+    "colsample_bytree": 0.75,
+    "min_child_weight": 8,
+    "reg_alpha": 0.15,
+    "reg_lambda": 1.5
+  }
+}
