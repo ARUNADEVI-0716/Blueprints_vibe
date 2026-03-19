@@ -32,8 +32,8 @@ export default function App() {
                     <Route path="/" element={<LandingPage />} />
 
                     {/* Auth */}
-                    <Route path="/login" element={<LoginPage />} />
-                    <Route path="/signup" element={<SignupPage />} />
+                    <Route path="/login"  element={<LoginPage />} />
+                    <Route path="/signup" element={<LoginPage />} />
                     <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
                     {/* Officer — separate auth */}
