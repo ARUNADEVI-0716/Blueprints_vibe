@@ -24,76 +24,79 @@ bias auditing. Built for the Credit-Vision hackathon challenge.
 ---
 
 ## Project Structure
-
 ```
 Blueprints_vibe/
 │
-├── frontend/                        # React + Vite application
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── NexusChat.tsx        # AI chatbot assistant
-│   │   │   ├── FraudAlertPanel.tsx  # Fraud risk display
-│   │   │   ├── AuthPanel.tsx        # Auth left panel
-│   │   │   ├── Skeleton.tsx         # Loading skeletons
-│   │   │   └── ProtectedRoute.tsx   # Route guard
-│   │   ├── context/
-│   │   │   └── AuthContext.tsx      # Global auth state
-│   │   ├── lib/
-│   │   │   └── supabaseClient.ts    # Supabase client init
-│   │   ├── pages/
-│   │   │   ├── applicant/           # Applicant-facing pages
-│   │   │   │   ├── ApplicantDashboard.tsx
-│   │   │   │   ├── ConnectBankPage.tsx
-│   │   │   │   ├── CreditScorePage.tsx
-│   │   │   │   ├── LoanApplicationPage.tsx
-│   │   │   │   ├── LoanStatusPage.tsx
-│   │   │   │   ├── DocumentUploadPage.tsx
-│   │   │   │   ├── AgreementPage.tsx
-│   │   │   │   └── RepaymentPage.tsx
-│   │   │   └── officer/             # Officer-facing pages
-│   │   │       ├── OfficerDashboard.tsx
-│   │   │       ├── ApplicationReview.tsx
-│   │   │       ├── OfficerLogin.tsx
-│   │   │       ├── OfficerTOTPSetup.tsx
-│   │   │       └── OfficerTOTPVerify.tsx
-│   │   └── App.tsx
-│   ├── index.html
-│   ├── tailwind.config.js
-│   ├── vite.config.ts
-│   └── package.json
+├── src/                             # React + Vite frontend (root level)
+│   ├── components/
+│   │   ├── NexusChat.tsx            # AI chatbot assistant
+│   │   ├── FraudAlertPanel.tsx      # Fraud risk display
+│   │   ├── AuthPanel.tsx            # Auth left panel
+│   │   ├── Skeleton.tsx             # Loading skeletons
+│   │   └── ProtectedRoute.tsx       # Route guard
+│   ├── context/
+│   │   └── AuthContext.tsx          # Global auth state
+│   ├── lib/
+│   │   └── supabaseClient.ts        # Supabase client init
+│   ├── pages/
+│   │   ├── applicant/
+│   │   │   ├── ApplicantDashboard.tsx
+│   │   │   ├── ConnectBankPage.tsx
+│   │   │   ├── CreditScorePage.tsx
+│   │   │   ├── LoanApplicationPage.tsx
+│   │   │   ├── LoanStatusPage.tsx
+│   │   │   ├── DocumentUploadPage.tsx
+│   │   │   ├── AgreementPage.tsx
+│   │   │   └── RepaymentPage.tsx
+│   │   └── officer/
+│   │       ├── OfficerDashboard.tsx
+│   │       ├── ApplicationReview.tsx
+│   │       ├── OfficerLogin.tsx
+│   │       ├── OfficerTOTPSetup.tsx
+│   │       └── OfficerTOTPVerify.tsx
+│   └── App.tsx
 │
 ├── backend/                         # Node.js + Express API
 │   ├── src/
 │   │   ├── middleware/
-│   │   │   └── auth.ts              # JWT verification, userDb, supabaseAdmin
+│   │   │   └── auth.ts
 │   │   ├── routes/
-│   │   │   ├── credit.ts            # Credit score calculation
-│   │   │   ├── plaid.ts             # Bank connection
-│   │   │   ├── stripe.ts            # Loan disbursement
-│   │   │   ├── fraud.ts             # Fraud detection
-│   │   │   ├── officer.ts           # Officer dashboard API
-│   │   │   ├── agreement.ts         # Loan agreement + OTP signing
-│   │   │   ├── guarantorOtp.ts      # Guarantor verification
-│   │   │   └── repayment.ts         # EMI payment schedule
+│   │   │   ├── credit.ts
+│   │   │   ├── plaid.ts
+│   │   │   ├── stripe.ts
+│   │   │   ├── fraud.ts
+│   │   │   ├── officer.ts
+│   │   │   ├── agreement.ts
+│   │   │   ├── guarantorOtp.ts
+│   │   │   └── repayment.ts
 │   │   ├── services/
-│   │   │   ├── creditEngine.ts      # Rule-based credit scoring
-│   │   │   ├── bureauEngine.ts      # Bureau data fusion layer
-│   │   │   ├── fraudEngine.ts       # Fraud signal analysis
-│   │   │   ├── plaidService.ts      # Plaid API wrapper
-│   │   │   ├── stripeService.ts     # Stripe API wrapper
-│   │   │   └── emailService.ts      # Resend email templates
+│   │   │   ├── creditEngine.ts
+│   │   │   ├── bureauEngine.ts
+│   │   │   ├── fraudEngine.ts
+│   │   │   ├── plaidService.ts
+│   │   │   ├── stripeService.ts
+│   │   │   └── emailService.ts
 │   │   └── server.ts
 │   ├── package.json
 │   └── tsconfig.json
 │
-└── ml/                              # Python FastAPI ML service
-    ├── main_v2.py                   # FastAPI server with bureau fusion
-    ├── train_v2.py                  # Model training script
-    ├── requirements.txt
-    ├── features.json                # Feature name list
-    ├── model.json                   # XGBoost model (generated)
-    ├── scaler.pkl                   # Feature scaler (generated)
-    └── bias_report.json             # Fairness audit report (generated)
+├── ml/                              # Python FastAPI ML service
+│   ├── main.py                      # Original FastAPI server
+│   ├── main_v2.py                   # Updated server with bureau fusion
+│   ├── train.py                     # Original training script
+│   ├── train_v2.py                  # Updated training with real datasets
+│   ├── requirements.txt
+│   ├── features.json                # Feature name list
+│   ├── model.json                   # XGBoost model (generated)
+│   ├── scaler.pkl                   # Feature scaler (generated)
+│   └── bias_report.json             # Fairness audit report (generated)
+│
+├── index.html
+├── tailwind.config.js
+├── vite.config.ts
+├── tsconfig.json
+├── package.json
+└── README.md
 ```
 ---
 
@@ -267,7 +270,6 @@ npm run dev
 
 ### 4. Frontend
 ```bash
-cd frontend
 npm install
 # create frontend/.env and fill in values
 npm run dev
@@ -291,7 +293,7 @@ cd ml && uvicorn main_v2:app --host 0.0.0.0 --port 8000 --reload
 cd backend && npm run dev
 
 # Terminal 3
-cd frontend && npm run dev
+npm run dev
 ```
 
 ---
